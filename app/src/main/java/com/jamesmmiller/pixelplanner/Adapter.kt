@@ -6,38 +6,59 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 // ColumnAdapter.kt
-class ColumnAdapter(private val columns: List<Column>, private val onAddTicket: (Column) -> Unit) :
-    RecyclerView.Adapter<ColumnAdapter.ViewHolder>() {
+class ColumnAdapter(private val columns: List<Column>, private val onAddColumn: () -> Unit, private val onAddTicket: (Column) -> Unit) :
+    RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-    inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+    companion object {
+        private const val VIEW_TYPE_ADD_COLUMN = 0
+        private const val VIEW_TYPE_COLUMN = 1
+    }
+
+    inner class AddColumnViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView)
+
+    inner class ColumnViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val columnTitle: TextView = itemView.findViewById(R.id.columnTitle)
         val ticketsRecyclerView: RecyclerView = itemView.findViewById(R.id.ticketsRecyclerView)
-        //val addTicketButton: FloatingActionButton = itemView.findViewById(R.id.addTicketButton)
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.column_item, parent, false)
-        return ViewHolder(view)
+    override fun getItemViewType(position: Int): Int {
+        return if (position == columns.size) VIEW_TYPE_ADD_COLUMN else VIEW_TYPE_COLUMN
     }
 
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val column = columns[position]
-        holder.columnTitle.text = column.title
-
-        val ticketAdapter = TicketAdapter(column.tickets) {
-            onAddTicket(column)
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        return if (viewType == VIEW_TYPE_ADD_COLUMN) {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.add_column_item, parent, false)
+            AddColumnViewHolder(view)
+        } else {
+            val view = LayoutInflater.from(parent.context).inflate(R.layout.column_item, parent, false)
+            ColumnViewHolder(view)
         }
-        holder.ticketsRecyclerView.adapter = ticketAdapter
-        holder.ticketsRecyclerView.layoutManager = LinearLayoutManager(holder.itemView.context)
+    }
+
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        if (holder is ColumnViewHolder) {
+            val column = columns[position]
+            holder.columnTitle.text = column.title
+
+            val ticketAdapter = TicketAdapter(column.tickets) {
+                onAddTicket(column)
+            }
+            holder.ticketsRecyclerView.adapter = ticketAdapter
+            holder.ticketsRecyclerView.layoutManager = LinearLayoutManager(holder.itemView.context)
+        } else if (holder is AddColumnViewHolder) {
+            holder.itemView.setOnClickListener {
+                onAddColumn()
+            }
+        }
     }
 
     override fun getItemCount(): Int {
-        return columns.size
+        return columns.size + 1
     }
 }
+
 
 
 // TicketAdapter.kt

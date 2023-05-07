@@ -35,7 +35,8 @@ class MainActivity : AppCompatActivity() {
         columnsRecyclerView = findViewById(R.id.columnsRecyclerView)
         // addColumnButton = findViewById(R.id.addColumnButton)
 
-        columnsRecyclerView.adapter = ColumnAdapter(columns, onAddTicket)
+        columnsRecyclerView.adapter = ColumnAdapter(columns, onAddColumn, onAddTicket)
+
         columnsRecyclerView.layoutManager = LinearLayoutManager(this, RecyclerView.HORIZONTAL, false)
 
 //        addColumnButton.setOnClickListener {
@@ -48,6 +49,13 @@ class MainActivity : AppCompatActivity() {
         // Add a new ticket to the column
         val newTicket = Ticket("10", "Ticket 10", "Ticket 10 description")
         column.tickets.add(newTicket)
+        columnsRecyclerView.adapter?.notifyDataSetChanged()
+    }
+
+    val onAddColumn: () -> Unit = {
+        // Add a new column
+        val newColumn = Column("4", "New Column")
+        columns.add(newColumn)
         columnsRecyclerView.adapter?.notifyDataSetChanged()
     }
 }
