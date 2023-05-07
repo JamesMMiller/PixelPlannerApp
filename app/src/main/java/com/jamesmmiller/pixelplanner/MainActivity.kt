@@ -33,7 +33,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.main_activity)
 
         columnsRecyclerView = findViewById(R.id.columnsRecyclerView)
-        //addColumnButton = findViewById(R.id.addColumnButton)
+        // addColumnButton = findViewById(R.id.addColumnButton)
 
         columnsRecyclerView.adapter = ColumnAdapter(columns, onAddTicket)
         columnsRecyclerView.layoutManager = LinearLayoutManager(this, RecyclerView.HORIZONTAL, false)

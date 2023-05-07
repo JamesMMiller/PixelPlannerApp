@@ -28,14 +28,6 @@
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
             tools:listitem="@layout/ticket_item" />
 
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/addTicketButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:contentDescription="Add Ticket"
-            app:srcCompat="@android:drawable/ic_input_add" />
-
     </LinearLayout>
 
 </androidx.cardview.widget.CardView>
