@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
         boardRecyclerView = findViewById(R.id.boardRecyclerView)
 
-        val layoutManager = GridLayoutManager(this, columns.size + 1)
+        val layoutManager = GridLayoutManager(this, 4)
         boardRecyclerView.layoutManager = layoutManager
         boardRecyclerView.adapter = BoardAdapter(columns, layoutManager,
             onAddColumn,
@@ -99,15 +99,4 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             Log.e("MainActivity", "Invalid column(s) provided in onTicketMoved")
         }
     }
-
-
-
-//    val ticketTouchHelperCallback: TicketTouchHelperCallback = TicketTouchHelperCallback { column, fromPos, toPos ->
-//        val columnObj = columns[column]
-////        val toColumnObj = columns[toColumn]
-//        val movedTicket = columnObj.tickets.removeAt(fromPos)
-//        columnObj.tickets.add(toPos, movedTicket)
-//
-//        columnsRecyclerView.adapter?.notifyDataSetChanged()
-//    }
 }
