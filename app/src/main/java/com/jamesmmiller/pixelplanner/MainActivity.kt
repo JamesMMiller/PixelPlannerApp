@@ -10,11 +10,12 @@ import android.text.TextWatcher
 import android.util.Log
 import android.view.View
 import android.widget.ArrayAdapter
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.NumberPicker
 import android.widget.Spinner
 import android.widget.Switch
+import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
@@ -26,6 +27,7 @@ import java.text.SimpleDateFormat
 import java.time.Duration
 import java.time.Instant
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 import java.util.UUID
 
@@ -79,23 +81,35 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
     private val now = Instant.now().plusSeconds(700)
 
     @RequiresApi(Build.VERSION_CODES.O)
-    private val columns =  mutableListOf<Column>(
+    private val columns = mutableListOf<Column>(
         Column(
             UUID.randomUUID(), "To Do", mutableListOf(
-            Ticket(UUID.randomUUID(), "Ticket 1", "Ticket 1 description", now, Duration.ofSeconds(300), false),
-            Ticket(UUID.randomUUID(), "Ticket 2", "Ticket 2 description"),
-            Ticket(UUID.randomUUID(), "Ticket 3", "Ticket 3 description" ))
-    ),
-    Column(UUID.randomUUID(), "In Progress", mutableListOf(
-        Ticket(UUID.randomUUID(), "Ticket 4", "Ticket 4 description"),
-        Ticket(UUID.randomUUID(), "Ticket 5", "Ticket 5 description"),
-        Ticket(UUID.randomUUID(), "Ticket 6", "Ticket 6 description"))
-    ),
-    Column(UUID.randomUUID(), "Done", mutableListOf(
-        Ticket(UUID.randomUUID(), "Ticket 7", "Ticket 7 description", null, null, true),
-        Ticket(UUID.randomUUID(), "Ticket 8", "Ticket 8 description", null, null, true),
-        Ticket(UUID.randomUUID(), "Ticket 9", "Ticket 9 description", null, null, true))
-    )
+                Ticket(
+                    UUID.randomUUID(),
+                    "Ticket 1",
+                    "Ticket 1 description",
+                    now,
+                    Duration.ofSeconds(300),
+                    false
+                ),
+                Ticket(UUID.randomUUID(), "Ticket 2", "Ticket 2 description"),
+                Ticket(UUID.randomUUID(), "Ticket 3", "Ticket 3 description")
+            )
+        ),
+        Column(
+            UUID.randomUUID(), "In Progress", mutableListOf(
+                Ticket(UUID.randomUUID(), "Ticket 4", "Ticket 4 description"),
+                Ticket(UUID.randomUUID(), "Ticket 5", "Ticket 5 description"),
+                Ticket(UUID.randomUUID(), "Ticket 6", "Ticket 6 description")
+            )
+        ),
+        Column(
+            UUID.randomUUID(), "Done", mutableListOf(
+                Ticket(UUID.randomUUID(), "Ticket 7", "Ticket 7 description", null, null, true),
+                Ticket(UUID.randomUUID(), "Ticket 8", "Ticket 8 description", null, null, true),
+                Ticket(UUID.randomUUID(), "Ticket 9", "Ticket 9 description", null, null, true)
+            )
+        )
     )
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -107,11 +121,13 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
         val layoutManager = GridLayoutManager(this, 4)
         boardRecyclerView.layoutManager = layoutManager
-        boardRecyclerView.adapter = BoardAdapter(columns, layoutManager,
+        boardRecyclerView.adapter = BoardAdapter(
+            columns, layoutManager,
             onAddColumn,
             onAddTicket = { column ->
                 onAddTicket(column)
-            }
+            },
+            onTicketSelected
         )
         val callback = BoardItemTouchHelperCallback(boardRecyclerView.adapter as BoardAdapter)
         val itemTouchHelper = ItemTouchHelper(callback)
@@ -119,21 +135,29 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
     }
 
-    //val onAddTicket: (com.jamesmmiller.pixelplanner.Column) -> Unit
-    val onAddTicket2: (Column) -> Unit = { column ->
-        // Add a new ticket to the column
-        val newTicket = Ticket(UUID.randomUUID(), "Ticket 10", "Ticket 10 description")
-        println("newTicket: $newTicket")
-        column.tickets.add(newTicket)
-        println("column.tickets: ${column.tickets}")
-        (boardRecyclerView.adapter as? BoardAdapter)?.updateItems()
-        boardRecyclerView.adapter?.notifyDataSetChanged()
+    @RequiresApi(Build.VERSION_CODES.O)
+    val onTicketClick: (Ticket) -> Unit = { ticket ->
+        showTicketDialog(
+            ticketToEdit = ticket,
+            onTicketAction = { title, description, dueDate, warningTime, _ ->
+                // Update the ticket
+                ticket.title = title
+                ticket.description = description
+                ticket.dueDate = dueDate
+                ticket.warningTime = warningTime
+
+                (boardRecyclerView.adapter as? BoardAdapter)?.updateItems()
+                boardRecyclerView.adapter?.notifyDataSetChanged()
+            }
+        )
     }
+
 
     @RequiresApi(Build.VERSION_CODES.O)
     val onAddTicket: (Column) -> Unit = { column ->
-        showAddTicketDialog { ticketTitle, ticketDescription, dueDate, warnigTime ->
-            val newTicket = Ticket(UUID.randomUUID(), ticketTitle, ticketDescription, dueDate, warnigTime)
+        showTicketDialog { ticketTitle, ticketDescription, dueDate, warnigTime, completed->
+            val newTicket =
+                Ticket(UUID.randomUUID(), ticketTitle, ticketDescription, dueDate, warnigTime, completed)
             column.tickets.add(newTicket)
             (boardRecyclerView.adapter as? BoardAdapter)?.updateItems()
             boardRecyclerView.adapter?.notifyDataSetChanged()
@@ -141,30 +165,71 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
-    private fun showAddTicketDialog(onTicketCreated: (String, String, Instant?, Duration?) -> Unit) {
+    val onTicketSelected: (Ticket) -> Unit = { ticket ->
+        showTicketDetailsDialog(
+            ticket,
+            onTicketDeleted = {
+                // Remove the ticket from the corresponding column
+                columns.find { column ->
+                    column.tickets.map { t -> t.id }.contains(ticket.id)
+                }?.tickets?.remove(ticket)
+                (boardRecyclerView.adapter as? BoardAdapter)?.updateItems()
+                boardRecyclerView.adapter?.notifyDataSetChanged()
+
+            }
+        )
+    }
+
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun showTicketDialog(
+        ticketToEdit: Ticket? = null,
+        onTicketAction: (String, String, Instant?, Duration?, Boolean) -> Unit
+    ) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_ticket, null)
         val titleInput = dialogView.findViewById<EditText>(R.id.ticketTitleInput)
         val descriptionInput = dialogView.findViewById<EditText>(R.id.ticketDescriptionInput)
         val dueDateTimeInput = dialogView.findViewById<EditText>(R.id.ticketDueDateTimeInput)
         val warningTimeLayout = dialogView.findViewById<LinearLayout>(R.id.warningTimeLayout)
         val warningTimeInput = dialogView.findViewById<EditText>(R.id.ticketWarningTimeInput)
-        val warningTimeUnitSpinner = dialogView.findViewById<Spinner>(R.id.ticketWarningTimeUnitSpinner)
+        val warningTimeUnitSpinner =
+            dialogView.findViewById<Spinner>(R.id.ticketWarningTimeUnitSpinner)
         val setDueDateSwitch = dialogView.findViewById<Switch>(R.id.ticketSetDueDateSwitch)
         val setWarningTimeSwitch = dialogView.findViewById<Switch>(R.id.ticketSetWarningTimeSwitch)
 
         dueDateTimeInput.visibility = View.GONE
 
+        ticketToEdit?.dueDate?.let {
+            dueDateTimeInput.setText(it.toString())
+        }
+        ticketToEdit?.title?.let {
+            titleInput.setText(it)
+        }
+        ticketToEdit?.description?.let {
+            descriptionInput.setText(it)
+        }
+        ticketToEdit?.warningTime?.let {
+            setWarningTimeSwitch.isChecked = true
+            warningTimeLayout.visibility = View.VISIBLE
+            warningTimeInput.setText(it.seconds.toString())
+        }
+        ticketToEdit?.dueDate?.let {
+            setDueDateSwitch.isChecked = true
+            dueDateTimeInput.visibility = View.VISIBLE
+        }
+
+
 
         setDueDateSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 dueDateTimeInput.visibility = View.VISIBLE
-                setWarningTimeSwitch.visibility = View.VISIBLE
             } else {
                 dueDateTimeInput.visibility = View.GONE
                 dueDateTimeInput.setText("")
-                setWarningTimeSwitch.isChecked = false
             }
         }
+
+
 
         setWarningTimeSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
@@ -176,7 +241,8 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
         }
 
         val timeUnits = arrayOf("Minutes", "Hours", "Days")
-        val spinnerAdapter = ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, timeUnits)
+        val spinnerAdapter =
+            ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, timeUnits)
         spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         warningTimeUnitSpinner.adapter = spinnerAdapter
 
@@ -195,9 +261,12 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             dateTimePickerDialog.show()
         }
 
+
         dialog.setOnShowListener {
             val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            positiveButton.isEnabled = false
+            positiveButton.isEnabled =
+                (titleInput.text.toString().trim().isNotBlank()
+                        && descriptionInput.text.toString().trim().isNotBlank())
             positiveButton.setOnClickListener {
                 val title = titleInput.text.toString().trim()
                 val description = descriptionInput.text.toString().trim()
@@ -228,7 +297,8 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
                         null
                     }
 
-                    onTicketCreated(title, description, dueDate, warningTime)
+                    val completed = ticketToEdit?.completed ?: false
+                    onTicketAction(title, description, dueDate, warningTime, completed)
                     dialog.dismiss()
                 }
             }
@@ -236,15 +306,38 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
 
         titleInput.onTextChange { updatePositiveButtonState(dialog, titleInput, descriptionInput) }
-        descriptionInput.onTextChange { updatePositiveButtonState(dialog, titleInput, descriptionInput) }
+        descriptionInput.onTextChange {
+            updatePositiveButtonState(
+                dialog,
+                titleInput,
+                descriptionInput
+            )
+        }
+        dueDateTimeInput.onTextChange{
+
+            val dueDateTimeString = dueDateTimeInput.text.toString()
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+            val parsedDate = dateFormat.parse(dueDateTimeString)
+            if (parsedDate == null) {
+                setWarningTimeSwitch.visibility = View.GONE
+            } else {
+                setWarningTimeSwitch.visibility = View.VISIBLE
+            }
+        }
 
         dialog.show()
     }
 
-    private fun updatePositiveButtonState(dialog: AlertDialog, titleInput: EditText, descriptionInput: EditText) {
+
+    private fun updatePositiveButtonState(
+        dialog: AlertDialog,
+        titleInput: EditText,
+        descriptionInput: EditText
+    ) {
         val title = titleInput.text.toString().trim()
         val description = descriptionInput.text.toString().trim()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = title.isNotBlank() && description.isNotBlank()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
+            title.isNotBlank() && description.isNotBlank()
     }
 
 
@@ -257,13 +350,13 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             }
 
             override fun afterTextChanged(s: Editable) {}
+
         })
     }
 
 
-
     @RequiresApi(Build.VERSION_CODES.O)
-    val onAddColumn : () -> Unit = {
+    val onAddColumn: () -> Unit = {
         showAddColumnDialog { columnTitle ->
             val newColumn = Column(UUID.randomUUID(), columnTitle)
             columns.add(newColumn)
@@ -313,4 +406,60 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             Log.e("MainActivity", "Invalid column(s) provided in onTicketMoved")
         }
     }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun showTicketDetailsDialog(
+        ticket: Ticket,
+        onTicketDeleted: () -> Unit
+    ) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_ticket_details, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        val titleView = dialogView.findViewById<TextView>(R.id.ticketTitle)
+        val descriptionView = dialogView.findViewById<TextView>(R.id.ticketDescription)
+        val dueDateView = dialogView.findViewById<TextView>(R.id.ticketDueDate)
+        val warningTimeView = dialogView.findViewById<TextView>(R.id.ticketWarningTime)
+        val editTicketButton = dialogView.findViewById<Button>(R.id.editTicketButton)
+        val deleteTicketButton = dialogView.findViewById<Button>(R.id.deleteTicketButton)
+
+        titleView.text = ticket.title
+        descriptionView.text = ticket.description
+
+        ticket.dueDate?.let { dueDate ->
+            val formattedDate = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                .format(Date.from(dueDate))
+            dueDateView.text = "Due Date: $formattedDate"
+        }
+
+        ticket.warningTime?.let { warningTime ->
+            warningTimeView.text = "Warning Time: ${warningTime.toHours()} Minutes"
+        }
+
+        editTicketButton.setOnClickListener {
+            showTicketDialog(
+                ticketToEdit = ticket,
+                onTicketAction = { title, description, dueDate, warningTime, _ ->
+                    // Update the ticket
+                    ticket.title = title
+                    ticket.description = description
+                    ticket.dueDate = dueDate
+                    ticket.warningTime = warningTime
+
+                    boardRecyclerView.adapter?.notifyDataSetChanged()
+                }
+            )
+            dialog.dismiss()
+        }
+
+
+        deleteTicketButton.setOnClickListener {
+            onTicketDeleted()
+            dialog.dismiss()
+        }
+
+        dialog.show()
+    }
 }
+

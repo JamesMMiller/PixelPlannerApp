@@ -12,7 +12,8 @@ class BoardAdapter(
     private val columns: List<Column>,
     private val layoutManager: GridLayoutManager,
     private val onAddColumn: () -> Unit,
-    private val onAddTicket: (Column) -> Unit
+    private val onAddTicket: (Column) -> Unit,
+    private val onTicketSelected: (Ticket) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     companion object {
@@ -26,26 +27,6 @@ class BoardAdapter(
 
     fun updateItems() {
         items = generateItems(columns)
-    }
-
-    fun getColumnAndIndex(position: Int): Pair<Column?, Int> {
-        var index = 0
-        var columnIndex = 0
-        var currentColumn: Column? = null
-        for (item in items) {
-            if (item is Column) {
-                columnIndex = 0
-                currentColumn = item
-            } else if (item is Ticket) {
-                if (index == position) {
-                    return Pair(currentColumn, columnIndex)
-                }
-                columnIndex++
-            }
-
-            index++
-        }
-        throw IllegalStateException("No ticket found at the specified position")
     }
 
 
@@ -148,6 +129,9 @@ class BoardAdapter(
                 // If the item is a Ticket, cast the holder to TicketViewHolder and update the UI.
                 (holder as TicketViewHolder).apply {
                     ticketTitle.text = item.title
+                    itemView.setOnClickListener {
+                        onTicketSelected(item)
+                    }
                 }
             }
             is AddTicketPlaceholder -> {
