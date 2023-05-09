@@ -23,19 +23,12 @@
         android:layout_height="wrap_content"
         android:text="Set Due Date" />
 
-    <DatePicker
-        android:id="@+id/ticketDueDatePicker"
+    <EditText
+        android:id="@+id/ticketDueDateTimeInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:calendarViewShown="false"
-        android:spinnersShown="true"
-        android:visibility="gone" />
-
-    <TimePicker
-        android:id="@+id/ticketDueTimePicker"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:timePickerMode="spinner"
+        android:focusable="false"
+        android:hint="Due Date &amp; Time"
         android:visibility="gone" />
 
     <Switch
@@ -45,10 +38,26 @@
         android:text="Set Warning Time"
         android:visibility="gone" />
 
-    <NumberPicker
-        android:id="@+id/ticketWarningTimePicker"
+    <LinearLayout
+        android:id="@+id/warningTimeLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:visibility="gone" />
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/ticketWarningTimeInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:inputType="number"
+            android:hint="Warning Time" />
+
+        <Spinner
+            android:id="@+id/ticketWarningTimeUnitSpinner"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+    </LinearLayout>
 
 </LinearLayout>

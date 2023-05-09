@@ -1,28 +1,70 @@
 package com.jamesmmiller.pixelplanner
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
 import android.view.View
-import android.widget.DatePicker
+import android.widget.ArrayAdapter
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.NumberPicker
+import android.widget.Spinner
 import android.widget.Switch
-import android.widget.TimePicker
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import java.text.SimpleDateFormat
 import java.time.Duration
 import java.time.Instant
 import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
+
+class DateTimePickerDialog(
+    private val context: Context,
+    private val onDateTimeSelected: (Calendar) -> Unit
+) {
+    private val calendar = Calendar.getInstance()
+
+    fun show() {
+        val datePickerDialog = DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                calendar.set(year, month, dayOfMonth)
+                showTimePickerDialog()
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        )
+        datePickerDialog.show()
+    }
+
+    private fun showTimePickerDialog() {
+        val timePickerDialog = TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                calendar.set(Calendar.MINUTE, minute)
+                onDateTimeSelected(calendar)
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            true
+        )
+        timePickerDialog.show()
+    }
+}
+
 
 interface TicketDragDropListener {
     fun onTicketMoved(fromColumn: Column?, fromPosition: Int, toColumn: Column?, toPosition: Int)
@@ -32,26 +74,6 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
 
     private lateinit var boardRecyclerView: RecyclerView
-    //private lateinit var addColumnButton: FloatingActionButton
-
-//    private val columns = mutableListOf<Column>(
-//        Column(
-//            UUID.randomUUID(), "To Do", mutableListOf(
-//            Ticket(UUID.randomUUID(), "Ticket 1", "Ticket 1 description"),
-//            Ticket(UUID.randomUUID(), "Ticket 2", "Ticket 2 description"),
-//            Ticket(UUID.randomUUID(), "Ticket 3", "Ticket 3 description"))
-//    ),
-//        Column(UUID.randomUUID(), "In Progress", mutableListOf(
-//            Ticket(UUID.randomUUID(), "Ticket 4", "Ticket 4 description"),
-//            Ticket(UUID.randomUUID(), "Ticket 5", "Ticket 5 description"),
-//            Ticket(UUID.randomUUID(), "Ticket 6", "Ticket 6 description"))
-//        ),
-//        Column(UUID.randomUUID(), "Done", mutableListOf(
-//            Ticket(UUID.randomUUID(), "Ticket 7", "Ticket 7 description"),
-//            Ticket(UUID.randomUUID(), "Ticket 8", "Ticket 8 description"),
-//            Ticket(UUID.randomUUID(), "Ticket 9", "Ticket 9 description"))
-//        )
-//    )
 
     @RequiresApi(Build.VERSION_CODES.O)
     private val now = Instant.now().plusSeconds(700)
@@ -123,33 +145,40 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_ticket, null)
         val titleInput = dialogView.findViewById<EditText>(R.id.ticketTitleInput)
         val descriptionInput = dialogView.findViewById<EditText>(R.id.ticketDescriptionInput)
-        val dueDatePicker = dialogView.findViewById<DatePicker>(R.id.ticketDueDatePicker)
-        val dueTimePicker = dialogView.findViewById<TimePicker>(R.id.ticketDueTimePicker)
-        val warningTimePicker = dialogView.findViewById<NumberPicker>(R.id.ticketWarningTimePicker)
+        val dueDateTimeInput = dialogView.findViewById<EditText>(R.id.ticketDueDateTimeInput)
+        val warningTimeLayout = dialogView.findViewById<LinearLayout>(R.id.warningTimeLayout)
+        val warningTimeInput = dialogView.findViewById<EditText>(R.id.ticketWarningTimeInput)
+        val warningTimeUnitSpinner = dialogView.findViewById<Spinner>(R.id.ticketWarningTimeUnitSpinner)
         val setDueDateSwitch = dialogView.findViewById<Switch>(R.id.ticketSetDueDateSwitch)
         val setWarningTimeSwitch = dialogView.findViewById<Switch>(R.id.ticketSetWarningTimeSwitch)
 
-        dueDatePicker.visibility = View.GONE
-        dueTimePicker.visibility = View.GONE
-        warningTimePicker.visibility = View.GONE
+        dueDateTimeInput.visibility = View.GONE
 
-        warningTimePicker.minValue = 1
-        warningTimePicker.maxValue = 48 // You can set an appropriate maximum value
 
         setDueDateSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                dueDatePicker.visibility = View.VISIBLE
-                dueTimePicker.visibility = View.VISIBLE
+                dueDateTimeInput.visibility = View.VISIBLE
+                setWarningTimeSwitch.visibility = View.VISIBLE
             } else {
-                dueDatePicker.visibility = View.GONE
-                dueTimePicker.visibility = View.GONE
+                dueDateTimeInput.visibility = View.GONE
+                dueDateTimeInput.setText("")
                 setWarningTimeSwitch.isChecked = false
             }
         }
 
         setWarningTimeSwitch.setOnCheckedChangeListener { _, isChecked ->
-            warningTimePicker.visibility = if (isChecked) View.VISIBLE else View.GONE
+            if (isChecked) {
+                warningTimeLayout.visibility = View.VISIBLE
+            } else {
+                warningTimeLayout.visibility = View.GONE
+                warningTimeInput.setText("")
+            }
         }
+
+        val timeUnits = arrayOf("Minutes", "Hours", "Days")
+        val spinnerAdapter = ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, timeUnits)
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        warningTimeUnitSpinner.adapter = spinnerAdapter
 
         val dialog = AlertDialog.Builder(this)
             .setTitle("Add Ticket")
@@ -157,6 +186,14 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             .setPositiveButton("Add", null)
             .setNegativeButton("Cancel", null)
             .create()
+
+        dueDateTimeInput.setOnClickListener {
+            val dateTimePickerDialog = DateTimePickerDialog(this) { calendar ->
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                dueDateTimeInput.setText(dateFormat.format(calendar.time))
+            }
+            dateTimePickerDialog.show()
+        }
 
         dialog.setOnShowListener {
             val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
@@ -167,21 +204,26 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
                 if (title.isNotBlank() && description.isNotBlank()) {
                     val dueDate: Instant? = if (setDueDateSwitch.isChecked) {
-                        val calendar = Calendar.getInstance()
-                        calendar.set(
-                            dueDatePicker.year,
-                            dueDatePicker.month,
-                            dueDatePicker.dayOfMonth,
-                            dueTimePicker.hour,
-                            dueTimePicker.minute
-                        )
-                        calendar.toInstant()
+                        val dueDateTimeString = dueDateTimeInput.text.toString()
+                        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                        val parsedDate = dateFormat.parse(dueDateTimeString)
+                        parsedDate?.toInstant()
                     } else {
                         null
                     }
 
                     val warningTime: Duration? = if (setWarningTimeSwitch.isChecked) {
-                        Duration.ofHours(warningTimePicker.value.toLong())
+                        val inputValue = warningTimeInput.text.toString().toIntOrNull()
+                        val selectedUnit = warningTimeUnitSpinner.selectedItem.toString()
+
+                        inputValue?.let { value ->
+                            when (selectedUnit) {
+                                "Minutes" -> Duration.ofMinutes(value.toLong())
+                                "Hours" -> Duration.ofHours(value.toLong())
+                                "Days" -> Duration.ofDays(value.toLong())
+                                else -> null
+                            }
+                        }
                     } else {
                         null
                     }
@@ -191,6 +233,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
                 }
             }
         }
+
 
         titleInput.onTextChange { updatePositiveButtonState(dialog, titleInput, descriptionInput) }
         descriptionInput.onTextChange { updatePositiveButtonState(dialog, titleInput, descriptionInput) }
