@@ -23,6 +23,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
+import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.time.Instant
@@ -218,33 +219,19 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             dueDateTimeInput.visibility = View.VISIBLE
         }
 
-
-
         setDueDateSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                dueDateTimeInput.visibility = View.VISIBLE
-            } else {
-                dueDateTimeInput.visibility = View.GONE
+            dueDateTimeInput.visibility = if (isChecked) View.VISIBLE else View.GONE
+            if (!isChecked) {
                 dueDateTimeInput.setText("")
             }
         }
 
-
-
         setWarningTimeSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                warningTimeLayout.visibility = View.VISIBLE
-            } else {
-                warningTimeLayout.visibility = View.GONE
-                warningTimeInput.setText("")
-            }
+            warningTimeLayout.visibility = if (isChecked) View.VISIBLE else View.GONE
+            warningTimeInput.setText("")
         }
 
-        val timeUnits = arrayOf("Minutes", "Hours", "Days")
-        val spinnerAdapter =
-            ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, timeUnits)
-        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        warningTimeUnitSpinner.adapter = spinnerAdapter
+        setupWarningTimeUnitSpinner(warningTimeUnitSpinner)
 
         val dialog = AlertDialog.Builder(this)
             .setTitle("Add Ticket")
@@ -261,7 +248,43 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             dateTimePickerDialog.show()
         }
 
+        setupDialogListeners(
+            dialog,
+            titleInput,
+            descriptionInput,
+            dueDateTimeInput,
+            warningTimeInput,
+            warningTimeUnitSpinner,
+            setDueDateSwitch,
+            setWarningTimeSwitch,
+            ticketToEdit,
+            onTicketAction
+        )
 
+        dialog.show()
+    }
+
+    private fun setupWarningTimeUnitSpinner(warningTimeUnitSpinner: Spinner) {
+        val timeUnits = arrayOf("Minutes", "Hours", "Days")
+        val spinnerAdapter =
+            ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, timeUnits)
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        warningTimeUnitSpinner.adapter = spinnerAdapter
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun setupDialogListeners(
+        dialog: AlertDialog,
+        titleInput: EditText,
+        descriptionInput: EditText,
+        dueDateTimeInput: EditText,
+        warningTimeInput: EditText,
+        warningTimeUnitSpinner: Spinner,
+        setDueDateSwitch: Switch,
+        setWarningTimeSwitch: Switch,
+        ticketToEdit: Ticket?,
+        onTicketAction: (String, String, Instant?, Duration?, Boolean) -> Unit
+    ) {
         dialog.setOnShowListener {
             val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             positiveButton.isEnabled =
@@ -271,63 +294,49 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
                 val title = titleInput.text.toString().trim()
                 val description = descriptionInput.text.toString().trim()
 
-                if (title.isNotBlank() && description.isNotBlank()) {
-                    val dueDate: Instant? = if (setDueDateSwitch.isChecked) {
-                        val dueDateTimeString = dueDateTimeInput.text.toString()
-                        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-                        val parsedDate = dateFormat.parse(dueDateTimeString)
-                        parsedDate?.toInstant()
-                    } else {
-                        null
+                val dueDate: Instant? = if (setDueDateSwitch.isChecked) {
+                    val dueDateTimeString = dueDateTimeInput.text.toString()
+                    val isoDateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault())
+                    val inputDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+
+                    val parsedDate = try {
+                        isoDateFormat.parse(dueDateTimeString)
+                    } catch (e: ParseException) {
+                        inputDateFormat.parse(dueDateTimeString)
                     }
-
-                    val warningTime: Duration? = if (setWarningTimeSwitch.isChecked) {
-                        val inputValue = warningTimeInput.text.toString().toIntOrNull()
-                        val selectedUnit = warningTimeUnitSpinner.selectedItem.toString()
-
-                        inputValue?.let { value ->
-                            when (selectedUnit) {
-                                "Minutes" -> Duration.ofMinutes(value.toLong())
-                                "Hours" -> Duration.ofHours(value.toLong())
-                                "Days" -> Duration.ofDays(value.toLong())
-                                else -> null
-                            }
-                        }
-                    } else {
-                        null
-                    }
-
-                    val completed = ticketToEdit?.completed ?: false
-                    onTicketAction(title, description, dueDate, warningTime, completed)
-                    dialog.dismiss()
+                    parsedDate?.toInstant()
+                } else {
+                    null
                 }
+
+                val warningTime: Duration? = if (setWarningTimeSwitch.isChecked) {
+                    val inputValue = warningTimeInput.text.toString().toIntOrNull()
+                    val selectedUnit = warningTimeUnitSpinner.selectedItem.toString()
+
+                    inputValue?.let { value ->
+                        when (selectedUnit) {
+                            "Minutes" -> Duration.ofMinutes(value.toLong())
+                            "Hours" -> Duration.ofHours(value.toLong())
+                            "Days" -> Duration.ofDays(value.toLong())
+                            else -> null
+                        }
+                    }
+                } else {
+                    null
+                }
+
+                val completed = ticketToEdit?.completed ?: false
+                onTicketAction(title, description, dueDate, warningTime, completed)
+                dialog.dismiss()
             }
         }
-
 
         titleInput.onTextChange { updatePositiveButtonState(dialog, titleInput, descriptionInput) }
-        descriptionInput.onTextChange {
-            updatePositiveButtonState(
-                dialog,
-                titleInput,
-                descriptionInput
-            )
+        descriptionInput.onTextChange { updatePositiveButtonState(dialog, titleInput, descriptionInput) }
+        dueDateTimeInput.onTextChange {
+            updateWarningTimeSwitchVisibility(dueDateTimeInput, setWarningTimeSwitch)
         }
-        dueDateTimeInput.onTextChange{
-
-            val dueDateTimeString = dueDateTimeInput.text.toString()
-            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-            val parsedDate = dateFormat.parse(dueDateTimeString)
-            if (parsedDate == null) {
-                setWarningTimeSwitch.visibility = View.GONE
-            } else {
-                setWarningTimeSwitch.visibility = View.VISIBLE
-            }
-        }
-
-        dialog.show()
     }
-
 
     private fun updatePositiveButtonState(
         dialog: AlertDialog,
@@ -336,10 +345,15 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
     ) {
         val title = titleInput.text.toString().trim()
         val description = descriptionInput.text.toString().trim()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
-            title.isNotBlank() && description.isNotBlank()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = title.isNotBlank() && description.isNotBlank()
     }
 
+    private fun updateWarningTimeSwitchVisibility(dueDateTimeInput: EditText, setWarningTimeSwitch: Switch) {
+        val dueDateTimeString = dueDateTimeInput.text.toString()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        val parsedDate = dateFormat.parse(dueDateTimeString)
+        setWarningTimeSwitch.visibility = if (parsedDate == null) View.GONE else View.VISIBLE
+    }
 
     private inline fun EditText.onTextChange(crossinline onTextChanged: () -> Unit) {
         this.addTextChangedListener(object : TextWatcher {
@@ -353,6 +367,8 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
         })
     }
+
+
 
 
     @RequiresApi(Build.VERSION_CODES.O)
