@@ -1,10 +1,15 @@
 package com.jamesmmiller.pixelplanner
 
+import android.os.Build
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.annotation.RequiresApi
+import androidx.cardview.widget.CardView
+import androidx.compose.ui.res.colorResource
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
@@ -117,6 +122,7 @@ class BoardAdapter(
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (val item = items[position]) {
             is Column -> {
@@ -128,6 +134,7 @@ class BoardAdapter(
             is Ticket -> {
                 // If the item is a Ticket, cast the holder to TicketViewHolder and update the UI.
                 (holder as TicketViewHolder).apply {
+                    setTicketBackground(itemView, item)
                     ticketTitle.text = item.title
                     itemView.setOnClickListener {
                         onTicketSelected(item)
@@ -153,6 +160,18 @@ class BoardAdapter(
                     }
                 }
             }
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun setTicketBackground(itemView: View, ticket: Ticket){
+        if (ticket.isOverdue()){
+            (itemView as CardView).setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.light_red))
+        }
+        else if (ticket.isAfterWarningTime()) {
+            (itemView as CardView).setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.light_orange))
+        } else {
+            (itemView as CardView).setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.white))
         }
     }
 

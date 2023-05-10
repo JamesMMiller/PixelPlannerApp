@@ -450,7 +450,9 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
         }
 
         ticket.warningTime?.let { warningTime ->
-            warningTimeView.text = "Warning Time: ${warningTime.toHours()} Minutes"
+            val formattedDate = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                .format(Date.from(ticket.warningInstant()))
+            warningTimeView.text = "Warning Time: $formattedDate"
         }
 
         editTicketButton.setOnClickListener {
