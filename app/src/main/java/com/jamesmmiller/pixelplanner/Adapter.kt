@@ -168,7 +168,7 @@ class BoardAdapter(
         if (ticket.isOverdue()){
             (itemView as CardView).setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.light_red))
         }
-        else if (ticket.isAfterWarningTime()) {
+        else if (ticket.isAfterWarningTime() == true) {
             (itemView as CardView).setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.light_orange))
         } else {
             (itemView as CardView).setCardBackgroundColor(ContextCompat.getColor(itemView.context, R.color.white))
@@ -194,8 +194,6 @@ class BoardAdapter(
             notifyItemMoved(fromPosition, toPosition)
         }
     }
-
-
 
 }
 

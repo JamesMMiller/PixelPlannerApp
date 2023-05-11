@@ -10,8 +10,10 @@ data class Column(val id: UUID, val title: String, val tickets: MutableList<Tick
 
 data class Ticket(val id: UUID, var title: String, var description: String, var dueDate: Instant? = null, var warningTime: Duration? = null, val completed: Boolean = false){
     @RequiresApi(Build.VERSION_CODES.O)
-    fun isAfterWarningTime(): Boolean{
-        return Instant.now().isAfter(warningInstant())
+    fun isAfterWarningTime(): Boolean? {
+        return warningTime?.let {
+            Instant.now().isAfter(warningInstant())
+        }
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
