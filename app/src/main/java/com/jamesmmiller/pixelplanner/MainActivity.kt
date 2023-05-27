@@ -331,8 +331,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             }
         }
 
-        titleInput.onTextChange { updatePositiveButtonState(dialog, titleInput, descriptionInput) }
-        descriptionInput.onTextChange { updatePositiveButtonState(dialog, titleInput, descriptionInput) }
+        titleInput.onTextChange { updatePositiveButtonState(dialog, titleInput) }
         dueDateTimeInput.onTextChange {
             updateWarningTimeSwitchVisibility(dueDateTimeInput, setWarningTimeSwitch)
         }
@@ -340,12 +339,10 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
     private fun updatePositiveButtonState(
         dialog: AlertDialog,
-        titleInput: EditText,
-        descriptionInput: EditText
+        titleInput: EditText
     ) {
         val title = titleInput.text.toString().trim()
-        val description = descriptionInput.text.toString().trim()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = title.isNotBlank() && description.isNotBlank()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = title.isNotBlank()
     }
 
     private fun updateWarningTimeSwitchVisibility(dueDateTimeInput: EditText, setWarningTimeSwitch: Switch) {
@@ -449,7 +446,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             dueDateView.text = "Due Date: $formattedDate"
         }
 
-        ticket.warningTime?.let { warningTime ->
+        ticket.warningTime?.let { _ ->
             val formattedDate = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
                 .format(Date.from(ticket.warningInstant()))
             warningTimeView.text = "Warning Time: $formattedDate"

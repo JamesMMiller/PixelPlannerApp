@@ -193,6 +193,20 @@ class BoardAdapter(
 
             notifyItemMoved(fromPosition, toPosition)
         }
+        else if (fromItem is Ticket && toItem is AddTicketPlaceholder) {
+            items.removeAt(fromPosition)
+            items.add(toPosition, fromItem)
+
+            val fromColumn = columns.firstOrNull { fromItem in it.tickets }
+            val toColumn = toItem.column
+
+            if (fromColumn != null && toColumn != null) {
+                fromColumn.tickets.remove(fromItem)
+                toColumn.tickets.add(fromItem)
+            }
+
+            notifyItemMoved(fromPosition, toPosition)
+        }
     }
 
 }

@@ -24,7 +24,7 @@ class BoardItemTouchHelperCallback(private val adapter: BoardAdapter) :
         viewHolder: RecyclerView.ViewHolder,
         target: RecyclerView.ViewHolder
     ): Boolean {
-        if (viewHolder is BoardAdapter.TicketViewHolder && target is BoardAdapter.TicketViewHolder) {
+        if (viewHolder is BoardAdapter.TicketViewHolder) {
             adapter.onTicketMoved(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
             adapter.onTicketMoved(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
             return true
