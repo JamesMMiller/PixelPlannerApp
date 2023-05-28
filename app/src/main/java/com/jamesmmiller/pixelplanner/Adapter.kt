@@ -200,7 +200,7 @@ class BoardAdapter(
             val fromColumn = columns.firstOrNull { fromItem in it.tickets }
             val toColumn = toItem.column
 
-            if (fromColumn != null && toColumn != null) {
+            if (fromColumn != null) {
                 fromColumn.tickets.remove(fromItem)
                 toColumn.tickets.add(fromItem)
             }

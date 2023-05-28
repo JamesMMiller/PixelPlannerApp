@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -135,6 +137,22 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
         itemTouchHelper.attachToRecyclerView(boardRecyclerView)
 
     }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.add_column -> {
+                // handle click here
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
 
     @RequiresApi(Build.VERSION_CODES.O)
     val onTicketClick: (Ticket) -> Unit = { ticket ->

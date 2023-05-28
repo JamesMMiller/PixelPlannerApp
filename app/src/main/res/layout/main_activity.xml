@@ -16,23 +16,4 @@
         app:spanCount="1"
         tools:listitem="@layout/column_item" />
 
-<!--    <com.google.android.material.floatingactionbutton.FloatingActionButton-->
-<!--        android:id="@+id/addColumnButton"-->
-<!--        android:layout_width="wrap_content"-->
-<!--        android:layout_height="wrap_content"-->
-<!--        android:layout_marginEnd="16dp"-->
-<!--        android:layout_marginBottom="16dp"-->
-<!--        android:contentDescription="Add Column"-->
-<!--        app:layout_constraintBottom_toBottomOf="parent"-->
-<!--        app:layout_constraintEnd_toEndOf="parent"-->
-<!--        app:srcCompat="@android:drawable/ic_input_add" />-->
-
-<!--    <Button-->
-<!--        android:id="@+id/addColumnButton"-->
-<!--        android:layout_height="wrap_content"-->
-<!--        android:layout_width="wrap_content"-->
-<!--        app:layout_constraintTop_toTopOf="columnsRecyclerView"-->
-<!--        app:layout_constraintRight_toRightOf="@id/columnsRecyclerView"-->
-<!--        android:text="Add Column" />-->
-
 </androidx.constraintlayout.widget.ConstraintLayout>
