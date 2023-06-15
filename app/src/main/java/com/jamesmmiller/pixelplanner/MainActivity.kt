@@ -1,13 +1,19 @@
 package com.jamesmmiller.pixelplanner
 
 import android.app.DatePickerDialog
+import android.app.Dialog
 import android.app.TimePickerDialog
 import android.content.Context
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -15,6 +21,8 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ListView
+import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.Switch
 import android.widget.TextView
@@ -22,9 +30,13 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.GlobalScope
+import java.io.IOException
+import java.net.InetAddress
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.time.Duration
@@ -33,6 +45,10 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.ConcurrentLinkedQueue
+import javax.jmdns.JmDNS
+import javax.jmdns.ServiceEvent
+import javax.jmdns.ServiceListener
 
 class DateTimePickerDialog(
     private val context: Context,
@@ -79,9 +95,13 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
 
     private lateinit var boardRecyclerView: RecyclerView
+    private val nsdManager by lazy { getSystemService(Context.NSD_SERVICE) as NsdManager }
+
 
     @RequiresApi(Build.VERSION_CODES.O)
     private val now = Instant.now().plusSeconds(700)
+
+    private val webserverList = mutableListOf<NsdServiceInfo>()
 
     @RequiresApi(Build.VERSION_CODES.O)
     private val columns = mutableListOf<Column>(
@@ -138,14 +158,34 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
     }
 
+    private class SampleListener : ServiceListener {
+        override fun serviceAdded(event: ServiceEvent) {
+            println("Service added: " + event.info)
+        }
+
+        override fun serviceRemoved(event: ServiceEvent) {
+            println("Service removed: " + event.info)
+        }
+
+        override fun serviceResolved(event: ServiceEvent) {
+            println("Service resolved: " + event.info)
+        }
+    }
+
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         return true
     }
 
+    private lateinit var progressDialog: Dialog
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            R.id.add_column -> {
+            R.id.add_webserver -> {
+                showAddServerDialog()
+                true
+            }
+            R.id.upload_board -> {
                 // handle click here
                 true
             }
@@ -153,6 +193,139 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
         }
     }
 
+    private val servicesToResolve = ConcurrentLinkedQueue<NsdServiceInfo>()
+
+    private fun showAddServerDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.add_server_dialog, null)
+        val builder = AlertDialog.Builder(this)
+            .setView(dialogView)
+        val alertDialog = builder.show()
+
+        val searchButton = dialogView.findViewById<Button>(R.id.search_button)
+        val addButton = dialogView.findViewById<Button>(R.id.add_button)
+        val serverList = dialogView.findViewById<ListView>(R.id.server_list)
+        val progressBar = dialogView.findViewById<ProgressBar>(R.id.progressBar)
+        var discoveryListener: NsdManager.DiscoveryListener? = null
+
+        val serverListAdapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_multiple_choice)
+        serverList.adapter = serverListAdapter
+        serverList.choiceMode = ListView.CHOICE_MODE_MULTIPLE
+
+        searchButton.setOnClickListener {
+            // Clear any old data
+            serverListAdapter.clear()
+
+            // Show spinner and disable button
+            searchButton.visibility = View.GONE
+            progressBar.visibility = View.VISIBLE
+
+            // Start network discovery
+            startNetworkDiscovery(serverListAdapter, searchButton, progressBar)
+        }
+
+        addButton.setOnClickListener {
+            val checkedItems = serverList.checkedItemPositions
+            for (i in 0 until checkedItems.size()) {
+                if (checkedItems.valueAt(i)) {
+                    val server = serverListAdapter.getItem(checkedItems.keyAt(i))
+                    val info = servicesToResolve.first{ it.serviceName == server }
+                    webserverList.add(info)
+                }
+            }
+            alertDialog.dismiss()
+        }
+
+        serverList.setOnItemClickListener { _, _, _, _ ->
+            // Enable the "add" button once at least one item is checked
+            addButton.isEnabled = serverList.checkedItemCount > 0
+        }
+
+        alertDialog.setOnCancelListener {
+            discoveryListener?.let { nsdManager.stopServiceDiscovery(it) }
+        }
+    }
+
+    private fun startNetworkDiscovery(serverListAdapter: ArrayAdapter<String>, searchButton: Button, progressBar: ProgressBar) {
+        val discoveryListener = object : NsdManager.DiscoveryListener {
+            override fun onDiscoveryStarted(serviceType: String) {
+                Log.d("NSD", "Service discovery started")
+                servicesToResolve.clear()
+            }
+
+            override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                Log.d("NSD", "Service found, serviceInfo: $serviceInfo")
+
+                // Add service to queue
+                servicesToResolve.add(serviceInfo)
+
+                // Add delay before starting resolution
+                Handler(Looper.getMainLooper()).postDelayed({
+                    resolveNextService(serverListAdapter)
+                }, 1000) // Delay the resolve by 1 second
+            }
+
+            override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+                Log.e("NSD", "service lost: $serviceInfo")
+                runOnUiThread {
+                    serverListAdapter.remove(serviceInfo.serviceName)
+                }
+            }
+
+            override fun onDiscoveryStopped(serviceType: String) {
+                Log.i("NSD", "Discovery stopped: $serviceType")
+                runOnUiThread {
+                    searchButton.visibility = View.VISIBLE
+                    progressBar.visibility = View.GONE
+                }
+            }
+
+            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                Log.e("NSD", "Discovery failed: Error code:$errorCode")
+                nsdManager.stopServiceDiscovery(this)
+                startNetworkDiscovery(serverListAdapter, searchButton, progressBar) // Restart the discovery
+            }
+
+            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                Log.e("NSD", "Discovery failed: Error code:$errorCode")
+                nsdManager.stopServiceDiscovery(this)
+                startNetworkDiscovery(serverListAdapter, searchButton, progressBar) // Restart the discovery
+            }
+        }
+
+        nsdManager.discoverServices(
+            "_http._tcp.",
+            NsdManager.PROTOCOL_DNS_SD,
+            discoveryListener
+        )
+
+        // Stop discovery after 30 seconds
+        Handler(Looper.getMainLooper()).postDelayed({
+            nsdManager.stopServiceDiscovery(discoveryListener)
+        }, 30000) // Delay the stop by 30 seconds
+    }
+
+    private fun resolveNextService(serverListAdapter: ArrayAdapter<String>) {
+        if (servicesToResolve.isNotEmpty()) {
+            val serviceInfo = servicesToResolve.poll()
+
+            nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                    Log.d("NSD", "Service resolved: $serviceInfo")
+                    runOnUiThread {
+                        serverListAdapter.add(serviceInfo.serviceName)
+                    }
+                    // Resolve next service
+                    resolveNextService(serverListAdapter)
+                }
+
+                override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                    Log.e("NSD", "Resolve failed: $errorCode")
+                    // Even if the resolve failed, try to resolve next service
+                    resolveNextService(serverListAdapter)
+                }
+            })
+        }
+    }
 
     @RequiresApi(Build.VERSION_CODES.O)
     val onTicketClick: (Ticket) -> Unit = { ticket ->
