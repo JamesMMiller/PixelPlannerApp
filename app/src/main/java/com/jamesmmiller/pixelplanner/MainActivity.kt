@@ -1,8 +1,6 @@
 package com.jamesmmiller.pixelplanner
 
-import android.app.DatePickerDialog
 import android.app.Dialog
-import android.app.TimePickerDialog
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -17,6 +15,7 @@ import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -30,61 +29,27 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
-import kotlinx.coroutines.GlobalScope
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.IOException
-import java.net.InetAddress
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.time.Duration
 import java.time.Instant
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
-import javax.jmdns.JmDNS
-import javax.jmdns.ServiceEvent
-import javax.jmdns.ServiceListener
-
-class DateTimePickerDialog(
-    private val context: Context,
-    private val onDateTimeSelected: (Calendar) -> Unit
-) {
-    private val calendar = Calendar.getInstance()
-
-    fun show() {
-        val datePickerDialog = DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                calendar.set(year, month, dayOfMonth)
-                showTimePickerDialog()
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH)
-        )
-        datePickerDialog.show()
-    }
-
-    private fun showTimePickerDialog() {
-        val timePickerDialog = TimePickerDialog(
-            context,
-            { _, hourOfDay, minute ->
-                calendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
-                calendar.set(Calendar.MINUTE, minute)
-                onDateTimeSelected(calendar)
-            },
-            calendar.get(Calendar.HOUR_OF_DAY),
-            calendar.get(Calendar.MINUTE),
-            true
-        )
-        timePickerDialog.show()
-    }
-}
 
 
 interface TicketDragDropListener {
@@ -157,21 +122,6 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
         itemTouchHelper.attachToRecyclerView(boardRecyclerView)
 
     }
-
-    private class SampleListener : ServiceListener {
-        override fun serviceAdded(event: ServiceEvent) {
-            println("Service added: " + event.info)
-        }
-
-        override fun serviceRemoved(event: ServiceEvent) {
-            println("Service removed: " + event.info)
-        }
-
-        override fun serviceResolved(event: ServiceEvent) {
-            println("Service resolved: " + event.info)
-        }
-    }
-
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         return true
@@ -179,6 +129,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
     private lateinit var progressDialog: Dialog
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.add_webserver -> {
@@ -186,7 +137,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
                 true
             }
             R.id.upload_board -> {
-                // handle click here
+                showUploadDialog()
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -194,6 +145,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
     }
 
     private val servicesToResolve = ConcurrentLinkedQueue<NsdServiceInfo>()
+    private val resolvedServices = ConcurrentLinkedQueue<NsdServiceInfo>()
 
     private fun showAddServerDialog() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.add_server_dialog, null)
@@ -228,12 +180,19 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             for (i in 0 until checkedItems.size()) {
                 if (checkedItems.valueAt(i)) {
                     val server = serverListAdapter.getItem(checkedItems.keyAt(i))
-                    val info = servicesToResolve.first{ it.serviceName == server }
-                    webserverList.add(info)
+                    val info = resolvedServices.firstOrNull{ it.serviceName == server }
+                    if (info != null) {
+                        webserverList.add(info)
+                    } else {
+                        // Handle the case where no matching service was found
+                        // (e.g., show a message to the user or log an error)
+                        Log.e("WEBSERVER", "No matching service found for $server in $resolvedServices")
+                    }
                 }
             }
             alertDialog.dismiss()
         }
+
 
         serverList.setOnItemClickListener { _, _, _, _ ->
             // Enable the "add" button once at least one item is checked
@@ -250,6 +209,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             override fun onDiscoveryStarted(serviceType: String) {
                 Log.d("NSD", "Service discovery started")
                 servicesToResolve.clear()
+                resolvedServices.clear()
             }
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
@@ -314,6 +274,7 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
                     runOnUiThread {
                         serverListAdapter.add(serviceInfo.serviceName)
                     }
+                    resolvedServices.add(serviceInfo)
                     // Resolve next service
                     resolveNextService(serverListAdapter)
                 }
@@ -371,6 +332,59 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
             }
         )
     }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun showUploadDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.upload_dialog, null)
+        val builder = AlertDialog.Builder(this)
+            .setView(dialogView)
+        val alertDialog = builder.show()
+
+        val uploadButton = dialogView.findViewById<Button>(R.id.upload_columns_button)
+        val columnList = dialogView.findViewById<ListView>(R.id.columns_list)
+        val serverList = dialogView.findViewById<ListView>(R.id.webserver_list)
+
+        val columnListAdapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_multiple_choice, columns.map { it.title })
+        columnList.adapter = columnListAdapter
+        columnList.choiceMode = ListView.CHOICE_MODE_MULTIPLE
+
+        val serverListAdapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_multiple_choice, webserverList.map { it.serviceName })
+        serverList.adapter = serverListAdapter
+        serverList.choiceMode = ListView.CHOICE_MODE_MULTIPLE
+
+        uploadButton.setOnClickListener {
+            val selectedColumns = mutableListOf<Column>()
+            val selectedWebservers = mutableListOf<NsdServiceInfo>()
+
+            for (i in 0 until columnList.count) {
+                if (columnList.isItemChecked(i)) {
+                    val columnTitle = columnListAdapter.getItem(i)!!
+                    val column = columns.find { it.title == columnTitle }!!
+                    selectedColumns.add(column)
+                }
+            }
+
+            for (i in 0 until serverList.count) {
+                if (serverList.isItemChecked(i)) {
+                    val serviceName = serverListAdapter.getItem(i)!!
+                    val webserver = webserverList.first { it.serviceName == serviceName }
+                    selectedWebservers.add(webserver)
+                }
+            }
+
+            for ((index, column) in selectedColumns.withIndex()) {
+                val isFirst = index == 0
+                val isLast = index == selectedColumns.lastIndex
+
+                selectedWebservers.forEach { webserver ->
+                    postColumn(column, isFirst, isLast, webserver)
+                }
+            }
+
+            alertDialog.dismiss()
+        }
+    }
+
 
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -454,6 +468,60 @@ class MainActivity : AppCompatActivity(), TicketDragDropListener {
 
         dialog.show()
     }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun postColumn(column: Column, isFirst: Boolean, isLast: Boolean, webserver: NsdServiceInfo) {
+        Log.d("postColumn", "Posting column ${column.title} to ${webserver.serviceName}")
+        Log.d("postColumn", webserver.toString())
+        val url = "http:/${webserver.host}/column"
+
+        Log.d("postColumn", "Url: $url")
+
+        val client = OkHttpClient()
+
+        val columnJson = JSONObject().apply {
+            put("id", column.id.toString())
+            put("title", column.title)
+            put("first", isFirst)
+            put("last", isLast)
+            put("tickets", JSONArray().apply {
+                column.tickets.forEach { ticket ->
+                    this.put(JSONObject().apply {
+                        put("id", ticket.id.toString())
+                        put("title", ticket.title)
+                        put("description", ticket.description)
+                        put("dueDate", ticket.dueDate?.epochSecond)
+                        put("warningTime", ticket.warningTime?.seconds)
+                        put("completed", ticket.completed)
+                    })
+                }
+            })
+        }
+
+        Log.d("columnJson", columnJson.toString())
+
+        val requestBody = columnJson.toString().toRequestBody("application/json".toMediaType())
+
+        Log.d("requestBody", requestBody.toString())
+
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .build()
+
+        Log.d("request", request.toString())
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onResponse(call: Call, response: Response) {
+                Log.d("response", response.toString())
+            }
+
+            override fun onFailure(call: Call, e: IOException) {
+                Log.d("Error response", e.toString())
+            }
+        })
+    }
+
 
     private fun setupWarningTimeUnitSpinner(warningTimeUnitSpinner: Spinner) {
         val timeUnits = arrayOf("Minutes", "Hours", "Days")
